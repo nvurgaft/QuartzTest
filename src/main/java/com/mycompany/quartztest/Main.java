@@ -5,10 +5,10 @@
  */
 package com.mycompany.quartztest;
 
+import static com.mycompany.quartztest.QuartzScheduler.getScheduler;
 import java.sql.SQLException;
 import java.util.Scanner;
-import static org.quartz.JobKey.jobKey;
-import org.quartz.Scheduler;
+import org.quartz.JobExecutionContext;
 import org.quartz.SchedulerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,32 +21,34 @@ public class Main {
 
     static final Logger logger = LoggerFactory.getLogger(Main.class);
 
-    public static final String RESOURCES_PATH = "./src/main/resources";
-
     public static void main(String[] args) {
 
         try {
-            ConnectionManager.initQuartzSqlTables();
+            
+            ConnectionManager.init();
 
-            Scheduler scheduler = QuartzScheduler.getScheduler();
+            QuartzScheduler.scheduleJob(HelloJob.class, "job1", 60, false);
+//            QuartzScheduler.scheduleJob(HelloJob.class, "job2", 10, false);
+            getScheduler().start();
+            
+            logger.info("Press enter to continue");
+            new Scanner(System.in).nextLine();
 
-            QuartzScheduler.allocateJobToScheduler(
-                    scheduler, HelloJob.class, "job1", 5);
-            
-            QuartzScheduler.allocateJobToScheduler(
-                    scheduler, HelloJob.class, "job2", 10);
-            
-            scheduler.start();
-            
-            scheduler.interrupt(jobKey("job1"));
-            
+            logger.info("Currently executing jobs");
+            for (JobExecutionContext jec : getScheduler().getCurrentlyExecutingJobs()) {
+                logger.info("Running job: {}", jec.getJobDetail().toString());
+            }
 
+//            scheduler.interrupt(jobKey("job1"));
             logger.info("Press enter to finish");
-            Scanner scanner = new Scanner(System.in);
-            scanner.nextLine();
+            new Scanner(System.in).nextLine();
 
             logger.info("Shutting down quartz");
-            QuartzScheduler.shutdownScheduler(scheduler, true);
+            QuartzScheduler.shutdownScheduler(true);
+
+            logger.info("Shutting down database");
+            ConnectionManager.shutdown();
+
             logger.info("DONE!!");
 
         } catch (SchedulerException ex) {

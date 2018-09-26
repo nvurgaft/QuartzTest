@@ -7,7 +7,6 @@ package com.mycompany.quartztest;
 
 import org.quartz.DisallowConcurrentExecution;
 import org.quartz.InterruptableJob;
-import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import org.quartz.PersistJobDataAfterExecution;
@@ -30,10 +29,12 @@ public class HelloJob implements InterruptableJob {
 
         logger.info("Job running at {}", jec.getFireTime());
         logger.info("Will run again at {}", jec.getNextFireTime());
-        JobDataMap jdm = jec.getJobDetail().getJobDataMap();
-        logger.info("With map key: {}", jdm.getString("key"));
+//        JobDataMap jdm = jec.getJobDetail().getJobDataMap();
+//        if (jdm != null) {
+//            logger.info("With map key: {}", jdm.getString("key"));
+//        }
     }
-    
+
     @Override
     public void interrupt() throws UnableToInterruptJobException {
         logger.info("Job interrupted");

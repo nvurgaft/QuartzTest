@@ -5,8 +5,9 @@
  */
 package com.mycompany.quartztest;
 
-import static com.mycompany.quartztest.Main.RESOURCES_PATH;
-import java.io.FileReader;
+import static com.mycompany.quartztest.FileSystem.getQuartzProperties;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.Properties;
 import org.quartz.Job;
 import static org.quartz.JobBuilder.newJob;
@@ -27,19 +28,52 @@ import org.slf4j.LoggerFactory;
  * @author nikolay
  */
 public class QuartzScheduler {
-
+    
     static final Logger logger = LoggerFactory.getLogger(QuartzScheduler.class);
     
-    public static void allocateJobToScheduler(
-            Scheduler scheduler, Class<? extends Job> clazz, 
-            String nameId, int intervalInSeconds, Object... objects) 
-    throws SchedulerException {
+    private static Scheduler scheduler;
+    
+    public static Scheduler getScheduler() throws SchedulerException {
+        
+        if (scheduler == null) {
+            synchronized (QuartzScheduler.class) {
+                if (scheduler == null) {
+                    SchedulerFactory schedFact;
+                    try {
+                        Properties properties = new Properties();
+                        try (InputStream is = Files.newInputStream(getQuartzProperties())) {
+                            properties.load(is);
+                        }
+//                        properties.load(new FileReader(RESOURCES_PATH + "/quartz.properties"));
+                        properties.put("org.quartz.dataSource.myDS.user", "SA");
+                        properties.put("org.quartz.dataSource.myDS.password", "");
+                        logger.info("Initializing Quartz scheduler with JDBCStore");
+                        schedFact = new org.quartz.impl.StdSchedulerFactory(properties);
+                    } catch (Throwable ex) {
+                        logger.error("Failed reading properties file", ex);
+                        logger.warn("Initializing Quartz scheduler with default behaviour");
+                        schedFact = new org.quartz.impl.StdSchedulerFactory();
+                    }
+                    
+                    scheduler = schedFact.getScheduler();
+                    if (scheduler == null) {
+                        throw new RuntimeException("Scheduler is null");
+                    }
+                }
+            }
+        }
+        return scheduler;
+    }
+    
+    public static void scheduleJob(Class<? extends Job> clazz,
+            String nameId, int intervalInSeconds, boolean isDurable)
+            throws SchedulerException {
         
         JobDetail job = newJob(clazz)
                 .withIdentity(jobKey(nameId))
+                .storeDurably(isDurable)
                 .build();
-
-        // Trigger the job to run now, and then every 40 seconds
+        
         Trigger trigger = newTrigger()
                 .withIdentity(triggerKey(nameId))
                 .startNow()
@@ -48,41 +82,25 @@ public class QuartzScheduler {
                         .repeatForever())
                 .build();
         
-        // Tell quartz to schedule the job using our trigger
-        scheduler.scheduleJob(job, trigger);
-    }
-
-    public static Scheduler getScheduler() throws SchedulerException {
-
-        SchedulerFactory schedFact;
-        try {
-            Properties properties = new Properties();
-            properties.load(new FileReader(RESOURCES_PATH + "/quartz.properties"));
-            properties.put("org.quartz.dataSource.myDS.user", "SA");
-            properties.put("org.quartz.dataSource.myDS.password", "");
-            logger.info("Initializing Quartz scheduler with JDBCStore");
-            schedFact = new org.quartz.impl.StdSchedulerFactory(properties);
-        } catch (Throwable ex) {
-            logger.error("Failed reading properties file", ex);
-            logger.warn("Initializing Quartz scheduler with default behaviour");
-            schedFact = new org.quartz.impl.StdSchedulerFactory();
+        if (!getScheduler().checkExists(jobKey(nameId))) {
+            
+            getScheduler().scheduleJob(job, trigger);
+        } else {
+            logger.info("Job '{}' already exists", nameId);
         }
-
-        Scheduler sched = schedFact.getScheduler();
-        return sched;
     }
-
-    public static void shutdownScheduler(Scheduler sched)
+    
+    public static void resetScheduler() throws SchedulerException {
+        getScheduler().clear();
+    }
+    
+    public static void shutdownScheduler()
             throws SchedulerException {
-        if (sched != null) {
-            sched.shutdown();
-        }
+        getScheduler().shutdown();
     }
-
-    public static void shutdownScheduler(Scheduler sched, boolean waitTillShutdown)
+    
+    public static void shutdownScheduler(boolean waitTillShutdown)
             throws SchedulerException {
-        if (sched != null) {
-            sched.shutdown(waitTillShutdown);
-        }
+        getScheduler().shutdown(waitTillShutdown);
     }
 }

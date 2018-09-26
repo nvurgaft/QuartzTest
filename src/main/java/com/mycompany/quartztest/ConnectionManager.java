@@ -5,12 +5,13 @@
  */
 package com.mycompany.quartztest;
 
-import static com.mycompany.quartztest.Main.RESOURCES_PATH;
-import java.io.File;
+import java.io.FileNotFoundException;
+import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
+import java.util.List;
 import javax.sql.DataSource;
 import org.hsqldb.cmdline.SqlFile;
 import org.hsqldb.jdbc.JDBCPool;
@@ -29,7 +30,7 @@ public class ConnectionManager {
     private static final int WAIT_SHUTDOWN_SECONDS = 3;
     private static final String USERNAME = "SA";
     private static final String PASSWORD = "";
-    
+
     private static final String DB_URL = "jdbc:hsqldb:file:/opt/db/testdb;ifexists=false";
 
     private static JDBCPool pool;
@@ -45,27 +46,49 @@ public class ConnectionManager {
                     pool.setUser(USERNAME);
                     pool.setPassword(PASSWORD);
                 }
+
+                if (pool == null) {
+                    throw new RuntimeException("Failed initializing database pool, aborting");
+                }
+                try {
+                    List<Path> sqlFiles = Arrays.asList(
+                            FileSystem.getQuartzHsqlScript(),
+                            FileSystem.getLogbackHsqlScript(),
+                            FileSystem.getApplicationHsqlScript()
+                    );
+
+                    try (Connection con = pool.getConnection()) {
+                        runSqlFiles(con, sqlFiles);
+                    }
+
+                } catch (FileNotFoundException e) {
+                    logger.error("Could not find file: {}", e);
+                }
             }
         }
 
         return pool;
     }
 
-    public static void initQuartzSqlTables() throws SQLException {
-        
+    public static void runSqlFiles(Connection con, List<Path> sqlFiles) throws SQLException {
+
 //        Class.forName("org.hsqldb.jdbc.JDBCDriver");
-        
-        try (Connection conn = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD)) {
-            if (conn != null) {
+        if (sqlFiles == null || sqlFiles.isEmpty()) {
+            return;
+        }
+
+        for (Path sqlf : sqlFiles) {
+            if (sqlf != null) {
                 try {
-                    SqlFile sqlFile = new SqlFile(new File(RESOURCES_PATH + "/hsql_tables.sql"));
-                    sqlFile.setConnection(conn);
+                    logger.info("Running sql file: {}..", sqlf.toString());
+                    SqlFile sqlFile = new SqlFile(sqlf.toFile());
+                    sqlFile.setConnection(con);
                     sqlFile.setContinueOnError(false);
                     sqlFile.setAutoClose(true);
                     sqlFile.execute();
-                    logger.info("Finished running .sql file");
+                    logger.info("Running sql file: {}.. SUCCESS", sqlf.toString());
                 } catch (Throwable ex) {
-                    logger.error("Failed running .sql init file", ex);
+                    logger.error("Running sql file: {}.. FAILED", sqlf.toString(), ex);
                 }
             }
         }
@@ -74,8 +97,18 @@ public class ConnectionManager {
     public static Connection getConnection() throws SQLException {
         DataSource ds = (JDBCPool) getDatasource();
         Connection conn = ds.getConnection();
+        if (conn == null) {
+            throw new RuntimeException("Connection is null");
+        }
         conn.setAutoCommit(false);
+
         return conn;
+    }
+    
+    public static void init() throws SQLException {
+        try (Connection con = getConnection()) {
+            con.isValid(5);
+        }
     }
 
     public static void shutdown() throws SQLException {

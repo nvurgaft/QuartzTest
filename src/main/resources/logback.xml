@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xml>
+<configuration debug="true" scan="true" scanPeriod="60 seconds">
+
+    <timestamp key="bySeconds" datePattern="yyyyMMdd.HHmmss"></timestamp>
+    
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+<!--    <appender name="application" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS_PATH}/resourcepie.log</file>
+        <encoder>
+            <pattern>%d{yyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <FileNamePattern>${LOGS_PATH}/resourcepie-%d{yyyy-MM-dd}.%i.log.gz</FileNamePattern>
+            <maxFileSize>100MB</maxFileSize>  
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>-->
+    
+    <appender name="DB" class="ch.qos.logback.classic.db.DBAppender">
+        <connectionSource class="ch.qos.logback.core.db.DataSourceConnectionSource">
+            <dataSource class="com.mchange.v2.c3p0.ComboPooledDataSource">
+                <driverClass>org.hsqldb.jdbc.JDBCDriver</driverClass>
+                <jdbcUrl>jdbc:hsqldb:file:/opt/db/testdb;ifexists=false</jdbcUrl>
+                <user>SA</user>
+                <password></password>
+            </dataSource>
+        </connectionSource>
+    </appender>
+    
+    <!-- console logger -->
+    <root level="DEBUG">
+        <appender-ref ref="STDOUT"/>
+    </root>
+    
+<!--    <logger name="com.mycompany.quartztest" level="DEBUG">
+        <appender-ref ref="application"/>
+    </logger>-->
+    
+    <logger name="com.mycompany.quartztest.HelloJob" level="DEBUG">
+        <appender-ref ref="DB"/>
+    </logger>
+</configuration>
